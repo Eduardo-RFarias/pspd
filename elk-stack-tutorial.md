@@ -78,14 +78,20 @@ minikube addons enable ingress
 kubectl get ingress kibana-ingress
 ```
 
-### Step 5: Configure Local Access
+### Step 5: Start Minikube Tunnel
 
-Add the Kibana hostname to your local hosts file:
+**Important**: After enabling ingress, you must run `minikube tunnel` for ingress resources to work:
 
 ```bash
-# Get Minikube IP
-minikube ip
+# Start minikube tunnel (run this in a separate terminal/PowerShell window)
+minikube tunnel
 ```
+
+**Note**: Keep this tunnel running in the background. You may need to enter your password when prompted.
+
+### Step 6: Configure Local Access
+
+Add the Kibana hostname to your local hosts file using `127.0.0.1` (not the Minikube IP):
 
 **Manual steps to add kibana.local:**
 
@@ -95,15 +101,21 @@ minikube ip
    - File → Open → `C:\Windows\System32\drivers\etc\hosts`
 3. **Add this line at the end**:
    ```
-   192.168.49.2 kibana.local
+   127.0.0.1 kibana.local
    ```
 4. **Save the file**
 
 **Alternative - PowerShell as Administrator:**
 
 ```powershell
-Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "192.168.49.2 kibana.local"
+Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "127.0.0.1 kibana.local"
 ```
+
+**Troubleshooting Access:**
+
+- Make sure `minikube tunnel` is running
+- Use `127.0.0.1` (not the Minikube IP) in your hosts file
+- Test connection: `Test-NetConnection -ComputerName kibana.local -Port 80`
 
 ## 🧪 Testing the Complete Pipeline
 
