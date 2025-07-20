@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openmp-kafka-app
+  labels:
+    app: openmp-kafka-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: openmp-kafka-app
+  template:
+    metadata:
+      labels:
+        app: openmp-kafka-app
+    spec:
+      containers:
+        - name: openmp-kafka-app
+          image: eduardorfarias/openmp-kafka-app:latest
+          env:
+            - name: KAFKA_BROKER
+              value: "kafka:9092"
+            - name: TOPIC_IN
+              value: "jogo-da-vida"
+            - name: TOPIC_OUT
+              value: "jogo-da-vida-output"
+            - name: GROUP_ID
+              value: "jogo-da-vida-group"
+            - name: OMP_NUM_THREADS
+              value: "4"
+          resources:
+            requests:
+              cpu: "1"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "1Gi"
+          imagePullPolicy: Always
