@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-game-of-life-app
+  labels:
+    app: spark-game-of-life-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-game-of-life-app
+  template:
+    metadata:
+      labels:
+        app: spark-game-of-life-app
+    spec:
+      serviceAccountName: spark
+      containers:
+        - name: spark-app
+          image: eduardorfarias/spark-game-of-life:latest
+          env:
+            - name: KAFKA_BROKER
+              value: "kafka:9092"
+            - name: TOPIC_IN
+              value: "jogo-da-vida-spark"
+            - name: TOPIC_OUT
+              value: "jogo-da-vida-output"
+            - name: GROUP_ID
+              value: "spark-jogo-da-vida-group"
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          imagePullPolicy: Always
