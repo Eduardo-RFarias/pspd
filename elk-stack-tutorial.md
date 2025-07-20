@@ -6,7 +6,6 @@ This tutorial shows how to deploy Elasticsearch and Kibana to complete your data
 
 - **Elasticsearch** for storing and indexing telemetry data
 - **Kibana** for creating dashboards and data visualization
-- **Ingress** for easy browser access to Kibana
 - **Complete data pipeline**: OpenMP App → Kafka → Output Consumer → Elasticsearch → Kibana
 
 ## 📋 Prerequisites
@@ -14,7 +13,6 @@ This tutorial shows how to deploy Elasticsearch and Kibana to complete your data
 - Kubernetes cluster running (Minikube or similar)
 - Kafka and OpenMP App already deployed
 - Output Consumer already deployed
-- Ingress Controller enabled in your cluster
 
 ## 🚀 Deployment Steps
 
@@ -57,65 +55,31 @@ kubectl logs elasticsearch-0 -f
 Once Elasticsearch is running, deploy Kibana:
 
 ```bash
-# Deploy Kibana Deployment, Service, and Ingress
+# Deploy Kibana Deployment and Service (NodePort)
 kubectl apply -f kibana/kibana-deployment.yaml
 kubectl apply -f kibana/kibana-service.yaml
-kubectl apply -f kibana/kibana-ingress.yaml
 
 # Check Kibana status
 kubectl get deployment kibana
 kubectl get pods -l app=kibana
-kubectl get ingress kibana-ingress
+kubectl get svc kibana
 ```
 
-### Step 4: Enable Ingress Controller
+You should see the service configured as ClusterIP:
+
+```
+NAME     TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+kibana   ClusterIP   10.111.102.67   <none>        5601/TCP   2m
+```
+
+### Step 4: Access Kibana
 
 ```bash
-# Enable ingress addon in Minikube
-minikube addons enable ingress
-
-# Verify ingress is working
-kubectl get ingress kibana-ingress
+# Forward Kibana port to localhost (run in background)
+kubectl port-forward svc/kibana 5601:5601
 ```
 
-### Step 5: Start Minikube Tunnel
-
-**Important**: After enabling ingress, you must run `minikube tunnel` for ingress resources to work:
-
-```bash
-# Start minikube tunnel (run this in a separate terminal/PowerShell window)
-minikube tunnel
-```
-
-**Note**: Keep this tunnel running in the background. You may need to enter your password when prompted.
-
-### Step 6: Configure Local Access
-
-Add the Kibana hostname to your local hosts file using `127.0.0.1` (not the Minikube IP):
-
-**Manual steps to add kibana.local:**
-
-1. **Open Notepad as Administrator**:
-   - Right-click on Notepad → "Run as administrator"
-2. **Open the hosts file**:
-   - File → Open → `C:\Windows\System32\drivers\etc\hosts`
-3. **Add this line at the end**:
-   ```
-   127.0.0.1 kibana.local
-   ```
-4. **Save the file**
-
-**Alternative - PowerShell as Administrator:**
-
-```powershell
-Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "127.0.0.1 kibana.local"
-```
-
-**Troubleshooting Access:**
-
-- Make sure `minikube tunnel` is running
-- Use `127.0.0.1` (not the Minikube IP) in your hosts file
-- Test connection: `Test-NetConnection -ComputerName kibana.local -Port 80`
+Then open your browser and go to: **http://localhost:5601**
 
 ## 🧪 Testing the Complete Pipeline
 
@@ -139,7 +103,12 @@ kubectl logs -l app=output-consumer-app -f
 
 ### Test Step 3: Access Kibana Dashboard
 
-Open your browser and go to: **http://kibana.local**
+```bash
+# Universal method: Port forwarding (run in background)
+kubectl port-forward svc/kibana 5601:5601
+```
+
+Then open your browser and go to: **http://localhost:5601**
 
 You should see the Kibana welcome screen!
 
@@ -190,62 +159,38 @@ Input → [OpenMP App] → Kafka → [Output Consumer] → Elasticsearch → Kib
 JSON      Processes   Topics     Enriches        Indexes    Visualizes  You!
 ```
 
-## 🔧 Monitoring and Troubleshooting
+## 🔧 Troubleshooting
 
-### Check All Components
+### Check Component Status
 
 ```bash
-# Check all pods
+# Check all pods are running
 kubectl get pods
 
-# Expected running pods:
-# elasticsearch-0
-# kibana-xxx
-# output-consumer-app-xxx
-# openmp-kafka-app-xxx
-# kafka-xxx
-```
-
-### Troubleshoot Elasticsearch
-
-```bash
 # Check Elasticsearch health
 kubectl exec elasticsearch-0 -- curl -X GET "localhost:9200/_cluster/health?pretty"
 
-# Check indices
-kubectl exec elasticsearch-0 -- curl -X GET "localhost:9200/_cat/indices?v"
+# Check if data is indexed
+kubectl exec elasticsearch-0 -- curl -X GET "localhost:9200/jogo-da-vida-telemetry/_search?size=3&pretty"
 ```
 
-### Troubleshoot Kibana
+### Troubleshoot Port Forwarding
 
 ```bash
-# Check Kibana logs
-kubectl logs -l app=kibana -f
-
-# Check Kibana health
-kubectl exec -l app=kibana -- curl -X GET "localhost:5601/api/status"
-```
-
-### Troubleshoot Ingress
-
-```bash
-# Check ingress status
-kubectl get ingress kibana-ingress
-kubectl describe ingress kibana-ingress
-
-# Make sure your hosts file is correct
-ping kibana.local
+# If localhost:5601 doesn't work, restart port forwarding:
+# Stop: Ctrl+C in the port-forward terminal
+# Start: kubectl port-forward svc/kibana 5601:5601
 ```
 
 ## 🎉 Success Indicators
 
-✅ **Elasticsearch**: StatefulSet running, cluster health GREEN/YELLOW  
-✅ **Kibana**: Deployment running, accessible via browser  
-✅ **Data Pipeline**: Messages flowing from OpenMP → Kafka → Consumer → Elasticsearch  
-✅ **Visualization**: Index pattern created, data visible in Kibana Discover  
-✅ **Dashboard**: Charts showing real-time telemetry data
+✅ **All pods running**: `kubectl get pods`  
+✅ **Data pipeline working**: OpenMP → Kafka → Consumer → Elasticsearch  
+✅ **Kibana accessible**: http://localhost:5601  
+✅ **Data indexed**: Telemetry visible in Elasticsearch  
+✅ **Dashboard ready**: Create index patterns and visualizations
 
-Your complete ELK stack is now running and visualizing real-time performance data from your OpenMP application! 🚀
+Your complete ELK stack is now running! 🚀
 
 ## 📈 Next Steps
 
