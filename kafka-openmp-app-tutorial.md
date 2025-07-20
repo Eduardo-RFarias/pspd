@@ -1,238 +1,148 @@
-# Deploying a Python OpenMP Application with Kafka on Kubernetes
+# Deploying and Testing the OpenMP Kafka Application on Kubernetes
 
-This tutorial shows how to deploy a Python application that uses OpenMP (C code) and connects to Kafka for message processing, all running on Kubernetes with maximum simplicity.
+This tutorial shows how to deploy and test a Python OpenMP application that processes Kafka messages on Kubernetes.
 
-## 🎯 What We're Building
+## 🎯 What We're Deploying
 
 - **Python application** that consumes JSON messages from Kafka
 - **OpenMP C code execution** for parallel processing
 - **Kafka producer** that sends telemetry back to Kafka
 - **2 replicas** running in Kubernetes for high availability
-- **Simple auto-created topics** for ease of use
 
 ## 📋 Prerequisites
 
 - Kubernetes cluster running (Minikube or similar)
 - Kafka already deployed on Kubernetes
-- Docker Hub account
-- Docker installed locally
+- Application Docker image available: `eduardorfarias/openmp-kafka-app:latest`
 
-## 🚀 Step-by-Step Implementation
+## 🚀 Deployment Steps
 
-### Step 1: Prepare the Application
+### Step 1: Deploy the Application
 
-Our Python application (`main.py`) does the following:
-
-1. **Consumes** messages from Kafka topic `jogo-da-vida`
-2. **Extracts** `powmin` and `powmax` from JSON
-3. **Executes** OpenMP C code with those parameters
-4. **Parses** the output logs
-5. **Sends** telemetry back to `jogo-da-vida-output` topic
-
-**Key Configuration (Environment Variables):**
-
-```python
-KAFKA_BROKER = os.environ.get("KAFKA_BROKER", "localhost:9092")
-TOPIC_IN = os.environ.get("TOPIC_IN", "jogo-da-vida")
-TOPIC_OUT = os.environ.get("TOPIC_OUT", "jogo-da-vida-output")
-GROUP_ID = os.environ.get("GROUP_ID", "jogo-da-vida-group")
-```
-
-**Important Kafka Consumer Settings:**
-
-```python
-consumer = KafkaConsumer(
-    TOPIC_IN,
-    bootstrap_servers=[KAFKA_BROKER],
-    auto_offset_reset="earliest",
-    enable_auto_commit=True,           # ✅ Automatic offset management
-    group_id=GROUP_ID,                 # ✅ Enables load balancing between replicas
-    value_deserializer=lambda x: json.loads(x.decode("utf-8")),
-)
-```
-
-### Step 2: Optimize the Dockerfile
-
-```dockerfile
-FROM ghcr.io/astral-sh/uv:bookworm-slim
-
-RUN apt-get update && apt-get install -y gcc libomp-dev make
-
-WORKDIR /app
-
-COPY jogodavida_openmp.c Makefile /app/
-RUN make jogodavida_openmp
-
-COPY pyproject.toml uv.lock /app/
-RUN uv sync
-
-COPY main.py /app/
-
-ENV OMP_NUM_THREADS=4                  # ⚡ 4 threads for parallel processing
-ENV PYTHONUNBUFFERED=1
-
-CMD ["uv", "run", "python", "main.py"]
-```
-
-### Step 3: Build and Push Docker Image
+The deployment YAML is already configured in `/openmp-app/openmp-app-deployment.yaml`:
 
 ```bash
-# Navigate to app directory
-cd openmp-app
+# Deploy the application
+kubectl apply -f openmp-app/openmp-app-deployment.yaml
 
-# Build the image
-docker build -t yourusername/openmp-kafka-app:latest .
-
-# Push to Docker Hub
-docker push yourusername/openmp-kafka-app:latest
-```
-
-### Step 4: Create Kubernetes Deployment
-
-Create `openmp-app-deployment.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: openmp-kafka-app
-  labels:
-    app: openmp-kafka-app
-spec:
-  replicas: 2 # 🔄 2 replicas for high availability
-  selector:
-    matchLabels:
-      app: openmp-kafka-app
-  template:
-    metadata:
-      labels:
-        app: openmp-kafka-app
-    spec:
-      containers:
-        - name: openmp-kafka-app
-          image: yourusername/openmp-kafka-app:latest
-          env:
-            - name: KAFKA_BROKER
-              value: "kafka:9092" # 🔗 Points to Kafka service
-            - name: TOPIC_IN
-              value: "jogo-da-vida"
-            - name: TOPIC_OUT
-              value: "jogo-da-vida-output"
-            - name: GROUP_ID
-              value: "jogo-da-vida-group" # 👥 Consumer group for load balancing
-            - name: OMP_NUM_THREADS
-              value: "4"
-          resources:
-            requests:
-              cpu: "1" # 💡 Realistic CPU request
-              memory: "512Mi"
-            limits:
-              cpu: "2" # 🚀 Allow burst to 2 CPUs
-              memory: "1Gi"
-          imagePullPolicy: Always
-```
-
-### Step 5: Deploy to Kubernetes
-
-```bash
-# Apply the deployment
-kubectl apply -f openmp-app-deployment.yaml
+# Scale to 2 replicas for load balancing
+kubectl scale deployment openmp-kafka-app --replicas=2
 
 # Check deployment status
 kubectl get pods
-
-# View logs (should be empty until messages arrive)
-kubectl logs deployment/openmp-kafka-app
 ```
 
-## 🔍 How It Works
+You should see something like:
 
-### **Load Balancing Magic** 🎯
+```
+NAME                               READY   STATUS    RESTARTS   AGE
+openmp-kafka-app-66d9f5487-9q4fh   1/1     Running   0          30s
+openmp-kafka-app-66d9f5487-mszg9   1/1     Running   0          30s
+```
 
-- **Consumer Group**: All replicas join the same `jogo-da-vida-group`
-- **Automatic Distribution**: Kafka automatically distributes messages between the 2 replicas
-- **No Duplicate Processing**: Each message is processed by only one replica
+### Step 2: Verify Application Startup
 
-### **Resource Allocation** ⚡
+Check the logs to ensure the application connected to Kafka:
 
-- **CPU Request**: 1 CPU guaranteed per pod
-- **CPU Limit**: Can burst up to 2 CPUs when available
-- **OpenMP Threads**: 4 threads for parallel processing
-- **Memory**: 512Mi-1Gi per pod
+```bash
+# Check logs from one of the pods
+kubectl logs openmp-kafka-app-66d9f5487-9q4fh
 
-### **Topic Auto-Creation** 🚀
+# Look for these success messages:
+# "Consumidor conectado ao broker 'kafka:9092' e inscrito no tópico 'jogo-da-vida'"
+```
 
-- **Simplicity**: Topics are created automatically when first used
-- **No Manual Setup**: Just start sending messages!
-- **Development-Friendly**: Perfect for testing and development
-
-## 📝 Testing the Deployment
+## 🧪 Testing the Application
 
 ### Send a Test Message
 
 ```bash
-# Connect to Kafka pod
-kubectl exec -it kafka-0 -- /bin/sh
-
-# Send test message
-kafka-console-producer --bootstrap-server localhost:9092 --topic jogo-da-vida
-{"powmin": 10, "powmax": 20}
+# Send test message with powmin=3, powmax=6
+echo '{"powmin":3,"powmax":6}' | kubectl exec -i kafka-consumer -- kafka-console-producer --bootstrap-server kafka:9092 --topic jogo-da-vida
 ```
 
-### Check Processing
+### Monitor Processing
 
 ```bash
-# View application logs
-kubectl logs -f deployment/openmp-kafka-app
+# Watch the application logs in real-time
+kubectl logs -f openmp-kafka-app-66d9f5487-9q4fh
 
-# Check output topic
-kubectl exec -it kafka-0 -- kafka-console-consumer \
-  --bootstrap-server localhost:9092 \
-  --topic jogo-da-vida-output \
-  --from-beginning
+# You should see:
+# [*] Mensagem recebida: {'powmin': 3, 'powmax': 6}
+# [*] Resultado da execução:
+# tam=8, tempos: init=0.0000029, comp=0.1483381, fim=0.0000060, tot=0.1483469
+# [*] Telemetria enviada: {'tam': 8, 'init': 2.9e-06, 'comp': 0.1483381, 'fim': 6e-06, 'tot': 0.1483469}
 ```
 
-## 🎉 Expected Results
+### Check Output Topic
 
-1. **Input**: JSON with `powmin` and `powmax`
-2. **Processing**: OpenMP C code executes in parallel
-3. **Output**: Telemetry JSON with timing data:
-   ```json
-   {
-     "tam": 1024,
-     "init": 0.001,
-     "comp": 0.25,
-     "fim": 0.002,
-     "tot": 0.253
-   }
-   ```
+```bash
+# Check the telemetry output in the output topic
+kubectl exec -it kafka-consumer -- kafka-console-consumer --bootstrap-server kafka:9092 --topic jogo-da-vida-output --from-beginning
 
-## 🔧 Troubleshooting
+# You should see JSON telemetry like:
+# {"tam": 8, "init": 2.9e-06, "comp": 0.1483381, "fim": 6e-06, "tot": 0.1483469}
+# {"tam": 16, "init": 0.0, "comp": 0.001797, "fim": 1e-06, "tot": 0.0017979}
+# {"tam": 32, "init": 9.1e-06, "comp": 0.0002041, "fim": 0.0, "tot": 0.0002131}
+# {"tam": 64, "init": 8.1e-06, "comp": 0.0009079, "fim": 0.0, "tot": 0.000916}
+```
 
-### Pod Not Starting
+## 🔍 Understanding the Results
 
-- **Check Resources**: Reduce CPU requests if cluster has limited resources
-- **View Events**: `kubectl describe pod <pod-name>`
-- **Check Logs**: `kubectl logs <pod-name>`
+### Input Message Format
 
-### No Message Processing
+```json
+{ "powmin": 3, "powmax": 6 }
+```
 
-- **Verify Kafka Connection**: Check `KAFKA_BROKER` environment variable
-- **Topic Names**: Ensure input topic has messages
-- **Consumer Group**: Check if other consumers are in the same group
+- `powmin=3`: Start with 2³ = 8 grid size
+- `powmax=6`: End with 2⁶ = 64 grid size
 
-### Performance Issues
+### Output Telemetry Format
 
-- **CPU Allocation**: Increase CPU limits for better OpenMP performance
-- **Thread Count**: Adjust `OMP_NUM_THREADS` based on available resources
-- **Memory**: Monitor memory usage and adjust limits
+```json
+{
+  "tam": 8, // Grid size (2^power)
+  "init": 2.9e-6, // Initialization time (seconds)
+  "comp": 0.1483381, // Computation time (seconds)
+  "fim": 6e-6, // Finalization time (seconds)
+  "tot": 0.1483469 // Total time (seconds)
+}
+```
 
-## 🏆 Key Success Factors
+## 🔧 Quick Troubleshooting
 
-1. **✅ Consumer Group Configuration**: Enables automatic load balancing
-2. **✅ Realistic Resource Requests**: Prevents scheduling issues
-3. **✅ Environment Variable Configuration**: Maximum flexibility
-4. **✅ Auto-commit Enabled**: Simplifies offset management
-5. **✅ Auto-topic Creation**: Reduces setup complexity
+### If Pods Don't Start
 
-This deployment provides a robust, scalable solution for processing Kafka messages with OpenMP parallel computation in Kubernetes! 🚀
+```bash
+kubectl describe pod <pod-name>
+# Check for resource constraints or image pull issues
+```
+
+### If No Messages Are Processed
+
+```bash
+# Check if topics exist
+kubectl exec -it kafka-consumer -- kafka-topics --bootstrap-server kafka:9092 --list
+
+# Verify Kafka connectivity
+kubectl logs <pod-name> | grep "conectado ao broker"
+```
+
+### Clean Kafka Topics (if needed)
+
+```bash
+# Delete topics to start fresh
+kubectl exec -it kafka-consumer -- kafka-topics --bootstrap-server kafka:9092 --delete --topic jogo-da-vida
+kubectl exec -it kafka-consumer -- kafka-topics --bootstrap-server kafka:9092 --delete --topic jogo-da-vida-output
+```
+
+## 🎉 Success Indicators
+
+✅ **Deployment**: 2 pods running  
+✅ **Kafka Connection**: "Consumidor conectado" message in logs  
+✅ **Message Processing**: "[*] Mensagem recebida" in logs  
+✅ **OpenMP Execution**: Multiple "tam=" entries showing different grid sizes  
+✅ **Telemetry Output**: JSON messages in `jogo-da-vida-output` topic
+
+Your OpenMP Kafka application is now successfully deployed and processing messages! 🚀
