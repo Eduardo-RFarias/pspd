@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: output-consumer-app
+  labels:
+    app: output-consumer-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: output-consumer-app
+  template:
+    metadata:
+      labels:
+        app: output-consumer-app
+    spec:
+      containers:
+        - name: output-consumer-app
+          image: eduardorfarias/output-consumer-app:latest
+          env:
+            - name: KAFKA_BROKER
+              value: "kafka:9092"
+            - name: TOPIC_IN
+              value: "jogo-da-vida-output"
+            - name: ELASTICSEARCH_HOST
+              value: "http://elasticsearch:9200"
+            - name: ELASTICSEARCH_INDEX
+              value: "jogo-da-vida-telemetry"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          imagePullPolicy: Always
