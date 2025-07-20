@@ -60,17 +60,37 @@ def main():
                     logger.info(line)
 
                     if line.startswith("tam"):
-                        line = [kv.strip() for kv in line.split(",")]
+                        # Parse format: tam=8, tempos: init=0.0000031, comp=0.0012369, fim=0.0000050, tot=0.0012450
+                        parts = line.split(", ")
+
+                        # Extract tam value
+                        tam_part = parts[0]  # "tam=8"
+                        tam = int(tam_part.split("=")[1])
+
+                        # Extract timing values from "tempos: init=X, comp=Y, fim=Z, tot=W"
+                        tempos_part = ", ".join(
+                            parts[1:]
+                        )  # "tempos: init=0.0000031, comp=0.0012369, fim=0.0000050, tot=0.0012450"
+                        tempos_part = tempos_part.replace(
+                            "tempos: ", ""
+                        )  # "init=0.0000031, comp=0.0012369, fim=0.0000050, tot=0.0012450"
+
+                        timing_pairs = tempos_part.split(", ")
+                        timings = {}
+                        for pair in timing_pairs:
+                            key, value = pair.split("=")
+                            timings[key] = float(value)
 
                         json_line = {
-                            "tam": int(line[1]),
-                            "init": float(line[2]),
-                            "comp": float(line[3]),
-                            "fim": float(line[4]),
-                            "tot": float(line[5]),
+                            "tam": tam,
+                            "init": timings["init"],
+                            "comp": timings["comp"],
+                            "fim": timings["fim"],
+                            "tot": timings["tot"],
                         }
 
                         producer.send(TOPIC_OUT, value=json.dumps(json_line))
+                        logger.info(f"[*] Telemetria enviada: {json_line}")
 
                 producer.flush()
 
