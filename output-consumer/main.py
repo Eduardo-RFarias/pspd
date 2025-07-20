@@ -3,10 +3,15 @@ import json
 import logging
 from kafka import KafkaConsumer
 from elasticsearch import Elasticsearch
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+# Suppress only the noisy Kafka operational logs
+logging.getLogger("kafka.coordinator.heartbeat").setLevel(logging.ERROR)
+logging.getLogger("kafka.coordinator.consumer").setLevel(logging.ERROR)
+logging.getLogger("kafka.coordinator").setLevel(logging.ERROR)
 
 KAFKA_BROKER = os.environ.get("KAFKA_BROKER", "localhost:9092")
 TOPIC_IN = os.environ.get("TOPIC_IN", "jogo-da-vida-output")
@@ -39,8 +44,8 @@ def main():
         value = message.value
         logger.info(f"[*] Mensagem recebida: {value}")
 
-        # Add timestamp and send to Elasticsearch
-        doc = {**value, "timestamp": datetime.utcnow().isoformat()}
+        # Add timestamp and send to Elasticsearch (fix deprecation warning)
+        doc = {**value, "timestamp": datetime.now(timezone.utc).isoformat()}
 
         es.index(index=ELASTICSEARCH_INDEX, body=doc)
         logger.info(f"[*] Enviado para Elasticsearch: {doc}")

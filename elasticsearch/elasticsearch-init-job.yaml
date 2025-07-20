@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: elasticsearch-init
+  labels:
+    app: elasticsearch-init
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: elasticsearch-init
+          image: curlimages/curl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for Elasticsearch to be ready..."
+              while ! curl -s http://elasticsearch:9200/_cluster/health; do
+                echo "Elasticsearch not ready, waiting 10 seconds..."
+                sleep 10
+              done
+
+              echo "Elasticsearch is ready. Creating index..."
+
+              # Check if index already exists
+              if curl -s -f http://elasticsearch:9200/jogo-da-vida-telemetry > /dev/null; then
+                echo "Index 'jogo-da-vida-telemetry' already exists."
+              else
+                echo "Creating index 'jogo-da-vida-telemetry'..."
+                curl -X PUT "http://elasticsearch:9200/jogo-da-vida-telemetry" \
+                  -H "Content-Type: application/json" \
+                  -d @/config/create-index.json
+                echo "Index created successfully."
+              fi
+
+              echo "Elasticsearch initialization complete."
+          volumeMounts:
+            - name: index-config
+              mountPath: /config
+      volumes:
+        - name: index-config
+          configMap:
+            name: elasticsearch-index-mapping

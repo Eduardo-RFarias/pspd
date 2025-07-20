@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-index-mapping
+  labels:
+    app: elasticsearch
+data:
+  create-index.json: |
+    {
+      "mappings": {
+        "properties": {
+          "game_id": {
+            "type": "keyword",
+            "index": true
+          },
+          "step": {
+            "type": "integer"
+          },
+          "total_steps": {
+            "type": "integer"
+          },
+          "board_size": {
+            "type": "integer"
+          },
+          "start_time": {
+            "type": "date",
+            "format": "epoch_second"
+          },
+          "end_time": {
+            "type": "date", 
+            "format": "epoch_second"
+          },
+          "impl": {
+            "type": "keyword",
+            "index": true
+          },
+          "timestamp": {
+            "type": "date",
+            "format": "strict_date_optional_time||epoch_millis"
+          },
+          "duration": {
+            "type": "integer",
+            "script": {
+              "source": "doc['end_time'].value.toInstant().toEpochMilli() - doc['start_time'].value.toInstant().toEpochMilli()"
+            }
+          }
+        }
+      },
+      "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 0,
+        "refresh_interval": "5s"
+      }
+    }

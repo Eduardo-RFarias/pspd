@@ -71,7 +71,7 @@ kubectl logs -f openmp-kafka-app-66d9f5487-9q4fh
 # [*] Mensagem recebida: {'powmin': 3, 'powmax': 6}
 # [*] Resultado da execução:
 # tam=8, tempos: init=0.0000029, comp=0.1483381, fim=0.0000060, tot=0.1483469
-# [*] Telemetria enviada: {'tam': 8, 'init': 2.9e-06, 'comp': 0.1483381, 'fim': 6e-06, 'tot': 0.1483469}
+# [*] Telemetria enviada: {'game_id': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'step': 1, 'total_steps': 4, 'board_size': 8, 'start_time': 1700000000, 'end_time': 1700000002, 'impl': 'openmp'}
 ```
 
 ### Check Output Topic
@@ -81,10 +81,10 @@ kubectl logs -f openmp-kafka-app-66d9f5487-9q4fh
 kubectl exec -it kafka-consumer -- kafka-console-consumer --bootstrap-server kafka:9092 --topic jogo-da-vida-output --from-beginning
 
 # You should see JSON telemetry like:
-# {"tam": 8, "init": 2.9e-06, "comp": 0.1483381, "fim": 6e-06, "tot": 0.1483469}
-# {"tam": 16, "init": 0.0, "comp": 0.001797, "fim": 1e-06, "tot": 0.0017979}
-# {"tam": 32, "init": 9.1e-06, "comp": 0.0002041, "fim": 0.0, "tot": 0.0002131}
-# {"tam": 64, "init": 8.1e-06, "comp": 0.0009079, "fim": 0.0, "tot": 0.000916}
+# {"game_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890", "step": 1, "total_steps": 4, "board_size": 8, "start_time": 1700000000, "end_time": 1700000002, "impl": "openmp"}
+# {"game_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890", "step": 2, "total_steps": 4, "board_size": 16, "start_time": 1700000002, "end_time": 1700000005, "impl": "openmp"}
+# {"game_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890", "step": 3, "total_steps": 4, "board_size": 32, "start_time": 1700000005, "end_time": 1700000012, "impl": "openmp"}
+# {"game_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890", "step": 4, "total_steps": 4, "board_size": 64, "start_time": 1700000012, "end_time": 1700000025, "impl": "openmp"}
 ```
 
 ## 🔍 Understanding the Results
@@ -102,11 +102,13 @@ kubectl exec -it kafka-consumer -- kafka-console-consumer --bootstrap-server kaf
 
 ```json
 {
-  "tam": 8, // Grid size (2^power)
-  "init": 2.9e-6, // Initialization time (seconds)
-  "comp": 0.1483381, // Computation time (seconds)
-  "fim": 6e-6, // Finalization time (seconds)
-  "tot": 0.1483469 // Total time (seconds)
+  "game_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890", // Unique game session ID
+  "step": 1, // Current step number (1-based)
+  "total_steps": 4, // Total steps in this game session
+  "board_size": 8, // Grid size (2^power)
+  "start_time": 1700000000, // Step start time (Unix timestamp)
+  "end_time": 1700000002, // Step end time (Unix timestamp)
+  "impl": "openmp" // Implementation type (openmp or spark)
 }
 ```
 

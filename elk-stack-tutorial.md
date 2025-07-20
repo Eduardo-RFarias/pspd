@@ -7,6 +7,7 @@ This tutorial shows how to deploy Elasticsearch and Kibana to complete your data
 - **Elasticsearch** for storing and indexing telemetry data
 - **Kibana** for creating dashboards and data visualization
 - **Complete data pipeline**: OpenMP App → Kafka → Output Consumer → Elasticsearch → Kibana
+- **New JSON schema** following the structure defined in `log.jsonc`
 
 ## 📋 Prerequisites
 
@@ -24,6 +25,10 @@ Elasticsearch needs to be deployed first since Kibana depends on it:
 # Deploy Elasticsearch StatefulSet and Service
 kubectl apply -f elasticsearch/elasticsearch-statefulset.yaml
 kubectl apply -f elasticsearch/elasticsearch-service.yaml
+
+# (Optional) Deploy enhanced index mapping for better performance
+kubectl apply -f elasticsearch/index-mapping.yaml
+kubectl apply -f elasticsearch/elasticsearch-init-job.yaml
 
 # Check Elasticsearch status
 kubectl get statefulset elasticsearch
@@ -81,6 +86,19 @@ kubectl port-forward svc/kibana 5601:5601
 
 Then open your browser and go to: **http://localhost:5601**
 
+### Step 5: (Optional) Deploy Kibana Index Pattern
+
+If you deployed the enhanced configuration:
+
+```bash
+# Deploy Kibana index pattern configuration
+kubectl apply -f kibana/kibana-index-pattern.yaml
+
+# Check if the init job completed successfully
+kubectl get jobs
+kubectl logs job/elasticsearch-init
+```
+
 ## 🧪 Testing the Complete Pipeline
 
 ### Test Step 1: Send Test Message to OpenMP App
@@ -97,8 +115,8 @@ echo '{"powmin":3,"powmax":5}' | kubectl exec -i kafka-consumer -- kafka-console
 kubectl logs -l app=output-consumer-app -f
 
 # You should see:
-# [*] Mensagem recebida: {'tam': 8, 'init': 2.9e-06, 'comp': 0.1483381, 'fim': 6e-06, 'tot': 0.1483469}
-# [*] Enviado para Elasticsearch: {'tam': 8, 'init': 2.9e-06, 'comp': 0.1483381, 'fim': 6e-06, 'tot': 0.1483469, 'timestamp': '2024-01-15T10:30:45.123456'}
+# [*] Mensagem recebida: {'game_id': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'step': 1, 'total_steps': 3, 'board_size': 8, 'start_time': 1700000000, 'end_time': 1700000002, 'impl': 'openmp'}
+# [*] Enviado para Elasticsearch: {'game_id': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'step': 1, 'total_steps': 3, 'board_size': 8, 'start_time': 1700000000, 'end_time': 1700000002, 'impl': 'openmp', 'timestamp': '2024-01-15T10:30:45.123456'}
 ```
 
 ### Test Step 3: Access Kibana Dashboard
@@ -128,21 +146,26 @@ You should see the Kibana welcome screen!
 1. Go to **Analytics > Discover**
 2. Select your `jogo-da-vida-telemetry*` index pattern
 3. You should see your telemetry data with fields:
-   - `tam` (matrix size)
-   - `init` (initialization time)
-   - `comp` (computation time)
-   - `fim` (finalization time)
-   - `tot` (total time)
-   - `timestamp`
+   - `game_id` (unique session identifier)
+   - `step` (current step number)
+   - `total_steps` (total steps in session)
+   - `board_size` (matrix size)
+   - `start_time` (step start time)
+   - `end_time` (step end time)
+   - `impl` (implementation type: openmp/spark)
+   - `timestamp` (processing timestamp)
 
 ### Step 3: Create Visualizations
 
 1. Go to **Analytics > Visualize Library**
 2. Click **Create visualization**
 3. Example visualizations:
-   - **Line chart**: `tot` (total time) over time
-   - **Bar chart**: Average `comp` time by `tam` (matrix size)
-   - **Metric**: Latest values of execution times
+   - **Line chart**: Step duration (`end_time - start_time`) over time
+   - **Bar chart**: Average step duration by `board_size` (matrix size)
+   - **Pie chart**: Distribution of steps by `impl` (implementation type)
+   - **Data table**: Game sessions with `game_id`, `step`, and `board_size`
+   - **Metric**: Total number of completed steps
+   - **Histogram**: Distribution of `board_size` values
 
 ### Step 4: Build Dashboard
 
@@ -192,9 +215,55 @@ kubectl exec elasticsearch-0 -- curl -X GET "localhost:9200/jogo-da-vida-telemet
 
 Your complete ELK stack is now running! 🚀
 
+## ⚡ Enhanced Features (Optional Configuration)
+
+If you deployed the enhanced configuration files, you get:
+
+### **Better Data Types**
+
+- `start_time`/`end_time` → Proper date fields for time-based analysis
+- `game_id`/`impl` → Keyword fields for efficient filtering and grouping
+- Automatic `duration` calculation from start/end times
+
+### **Performance Optimizations**
+
+- Optimized index mapping for faster queries
+- Reduced storage overhead with proper field types
+- Better aggregation performance
+
+### **Rich Analytics**
+
+- Group steps by game session using `game_id`
+- Compare performance between `impl` types (openmp vs spark)
+- Track step progression within game sessions
+- Time-series analysis of step durations
+- Performance correlation with `board_size`
+
+### **Example Advanced Queries**
+
+```json
+// Average step duration by board size
+GET /jogo-da-vida-telemetry/_search
+{
+  "aggs": {
+    "by_board_size": {
+      "terms": { "field": "board_size" },
+      "aggs": {
+        "avg_duration": {
+          "avg": {
+            "script": "doc['end_time'].value.toInstant().toEpochMilli() - doc['start_time'].value.toInstant().toEpochMilli()"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
 ## 📈 Next Steps
 
-- Create more complex visualizations
-- Set up alerts for performance thresholds
-- Explore Kibana's machine learning features
+- Create more complex visualizations using the new field structure
+- Set up alerts for performance thresholds using step duration
+- Explore Kibana's machine learning features for anomaly detection
+- Compare performance between OpenMP and Spark implementations
 - Scale Elasticsearch horizontally if needed

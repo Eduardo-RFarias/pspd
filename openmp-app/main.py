@@ -2,11 +2,18 @@ import os
 import subprocess
 import json
 import logging
+import uuid
+import time
 from typing import IO, cast
 from kafka import KafkaConsumer, KafkaProducer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+# Suppress only the noisy Kafka operational logs
+logging.getLogger("kafka.coordinator.heartbeat").setLevel(logging.ERROR)
+logging.getLogger("kafka.coordinator.consumer").setLevel(logging.ERROR)
+logging.getLogger("kafka.coordinator").setLevel(logging.ERROR)
 
 KAFKA_BROKER = os.environ.get("KAFKA_BROKER", "localhost:9092")
 TOPIC_IN = os.environ.get("TOPIC_IN", "jogo-da-vida")
@@ -45,6 +52,15 @@ def main():
                 powmin = value["powmin"]
                 powmax = value["powmax"]
 
+                # Generate unique game ID for this execution
+                game_id = str(uuid.uuid4())
+                total_steps = powmax - powmin + 1
+                current_step = 0
+
+                # Record when we start the entire process
+                process_start_time = int(time.time())
+                step_start_time = process_start_time
+
                 process = subprocess.Popen(
                     ["./jogodavida_openmp", str(powmin), str(powmax)],
                     stdout=subprocess.PIPE,
@@ -60,34 +76,30 @@ def main():
                     logger.info(line)
 
                     if line.startswith("tam"):
+                        current_step += 1
+
+                        # Record step end time
+                        step_end_time = int(time.time())
+
                         # Parse format: tam=8, tempos: init=0.0000031, comp=0.0012369, fim=0.0000050, tot=0.0012450
                         parts = line.split(", ")
 
                         # Extract tam value
                         tam_part = parts[0]  # "tam=8"
-                        tam = int(tam_part.split("=")[1])
-
-                        # Extract timing values from "tempos: init=X, comp=Y, fim=Z, tot=W"
-                        tempos_part = ", ".join(
-                            parts[1:]
-                        )  # "tempos: init=0.0000031, comp=0.0012369, fim=0.0000050, tot=0.0012450"
-                        tempos_part = tempos_part.replace(
-                            "tempos: ", ""
-                        )  # "init=0.0000031, comp=0.0012369, fim=0.0000050, tot=0.0012450"
-
-                        timing_pairs = tempos_part.split(", ")
-                        timings = {}
-                        for pair in timing_pairs:
-                            key, value = pair.split("=")
-                            timings[key] = float(value)
+                        board_size = int(tam_part.split("=")[1])
 
                         json_line = {
-                            "tam": tam,
-                            "init": timings["init"],
-                            "comp": timings["comp"],
-                            "fim": timings["fim"],
-                            "tot": timings["tot"],
+                            "game_id": game_id,
+                            "step": current_step,
+                            "total_steps": total_steps,
+                            "board_size": board_size,
+                            "start_time": step_start_time,
+                            "end_time": step_end_time,
+                            "impl": "openmp",
                         }
+
+                        # Next step starts when this one ends
+                        step_start_time = step_end_time
 
                         producer.send(TOPIC_OUT, value=json.dumps(json_line))
                         logger.info(f"[*] Telemetria enviada: {json_line}")

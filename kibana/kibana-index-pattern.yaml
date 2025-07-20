@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-index-pattern
+  labels:
+    app: kibana
+data:
+  index-pattern.json: |
+    {
+      "objects": [
+        {
+          "id": "jogo-da-vida-telemetry-*",
+          "type": "index-pattern",
+          "version": 1,
+          "attributes": {
+            "title": "jogo-da-vida-telemetry*",
+            "timeFieldName": "timestamp",
+            "fields": "[{\"name\":\"game_id\",\"type\":\"string\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"step\",\"type\":\"number\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"total_steps\",\"type\":\"number\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"board_size\",\"type\":\"number\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"start_time\",\"type\":\"date\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"end_time\",\"type\":\"date\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"impl\",\"type\":\"string\",\"searchable\":true,\"aggregatable\":true},{\"name\":\"timestamp\",\"type\":\"date\",\"searchable\":true,\"aggregatable\":true}]"
+          }
+        }
+      ]
+    }
